@@ -187,6 +187,10 @@ export class Auth {
 
     if (process.env.CLIMICROSOFT365_ACCESS_TOKEN) {
       this._connection.active = true;
+      this._connection.accessTokens[this.defaultResource] = {
+        expiresOn: null,
+        accessToken: process.env.CLIMICROSOFT365_ACCESS_TOKEN
+      };
       return;
     }
 
