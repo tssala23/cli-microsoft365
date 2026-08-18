@@ -185,6 +185,11 @@ export class Auth {
       return;
     }
 
+    if (process.env.CLIMICROSOFT365_ACCESS_TOKEN) {
+      this._connection.active = true;
+      return;
+    }
+
     try {
       const connection: Connection = await this.getConnectionInfoFromStorage();
       this._connection = Object.assign(this._connection, connection);
