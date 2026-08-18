@@ -195,6 +195,31 @@ export class Auth {
   }
 
   public async ensureAccessToken(resource: string, logger: Logger, debug: boolean = false, fetchNew: boolean = false): Promise<string> {
+    const externalToken = process.env.CLIMICROSOFT365_ACCESS_TOKEN;
+    if (externalToken) {
+      if (debug) {
+        await logger.logToStderr('Using access token from CLIMICROSOFT365_ACCESS_TOKEN environment variable');
+      }
+      this.connection.accessTokens[resource] = {
+        expiresOn: null,
+        accessToken: externalToken
+      };
+      this.connection.active = true;
+      this.connection.authType = AuthType.Secret;
+      try {
+        this.connection.identityName = accessTokenUtil.accessToken.getUserNameFromAccessToken(externalToken);
+        this.connection.identityId = accessTokenUtil.accessToken.getUserIdFromAccessToken(externalToken);
+        this.connection.identityTenantId = accessTokenUtil.accessToken.getTenantIdFromAccessToken(externalToken);
+        this.connection.name = this.connection.name || this.connection.identityId;
+      }
+      catch {
+        this.connection.identityName = this.connection.identityName || 'external-token';
+        this.connection.identityId = this.connection.identityId || 'external-token';
+        this.connection.name = this.connection.name || 'external-token';
+      }
+      return externalToken;
+    }
+
     const now: Date = new Date();
     const accessToken: AccessToken | undefined = this.connection.accessTokens[resource];
     const expiresOn: Date = accessToken && accessToken.expiresOn ?
