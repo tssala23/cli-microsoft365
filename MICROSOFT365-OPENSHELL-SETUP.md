@@ -149,6 +149,18 @@ Microsoft Graph cloud endpoint, and is reported by `m365 status` as
 `externalToken`. Removing the variable ends the usable external session even
 if the same CLI process remains running.
 
+The branch includes an npm `prepare` hook, so consumers can also install it
+directly from Git. npm clones the complete repository, installs the build
+dependencies, runs the TypeScript build, and then packs the compiled `dist`
+entrypoints:
+
+```sh
+npm install github:tssala23/cli-microsoft365#feature/external-access-token-hardening
+```
+
+This Git installation performs a source build and is therefore slower than
+installing the precompiled package from the npm registry.
+
 ```sh
 npm ci
 npm run build
