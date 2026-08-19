@@ -48,8 +48,10 @@ The result is a working OpenClaw assistant that can summarize recent Outlook
 messages and inspect calendar data while credential refresh, egress control,
 and auditing remain owned by OpenShell.
 
-This document records the working `saw-taj2` deployment and the credential
-flow used to give OpenClaw read-only access to Outlook mail and calendar data.
+This document records the credential flow first proven in `saw-taj2` and
+revalidated end to end in a clean `saw-taj3` deployment. In `saw-taj3`, both a
+direct Outlook CLI request and an OpenClaw-generated inbox summary succeeded
+through the governed Microsoft Graph provider.
 
 The hardened Microsoft CLI changes used by this deployment are maintained on
 the [`feature/external-access-token-hardening` branch of
@@ -57,6 +59,32 @@ the [`feature/external-access-token-hardening` branch of
 The branch models the environment credential as external authentication,
 supports Microsoft Graph only, and rejects attempts to send the token to
 another service resource.
+
+## Hardened branch compared with the original branch
+
+The original `feature/external-access-token` branch proved the essential
+integration: when `CLIMICROSOFT365_ACCESS_TOKEN` exists, the CLI bypasses its
+stored MSAL login and uses that value as a bearer credential. That behavior is
+what allows an opaque OpenShell placeholder to enter the normal CLI request
+path and be resolved by the governed egress proxy.
+
+The `feature/external-access-token-hardening` branch preserves that behavior
+and makes the external-token mode explicit and safer:
+
+| Area | Original branch | Hardened branch |
+| --- | --- | --- |
+| Resource handling | Reused the same token for every requested Microsoft resource | Accepts it only for the CLI's Microsoft Graph resource and fails before attaching it to SharePoint, Power BI, Azure Management, or another audience |
+| Authentication identity | Reported the external token as client-secret authentication | Adds the distinct `externalToken` authentication type |
+| Initialization | Populated different connection fields in `restoreAuth()` and `ensureAccessToken()` | Uses one connection-initialization helper so both paths establish the same state |
+| Opaque OpenShell placeholder | JWT claim parsing returned blank connection identity fields | Uses `external-token` as a stable fallback when the value is not a parseable JWT |
+| Empty or removed variable | Whitespace was accepted, and removal in a long-lived process could fall into an unrelated authentication path | Ignores whitespace-only values and reports a clear error if an established external credential disappears |
+| Debug status | Could include the external credential in debug connection output | Redacts the external credential from `m365 status --debug` |
+| Tests | No external-token-specific tests | Covers restore precedence, Graph use, cross-resource rejection, JWT and opaque identities, empty/removal behavior, and status redaction |
+
+The CLI deliberately does not validate the expiry of an opaque placeholder.
+In the OpenShell deployment, expiry and refresh belong to the gateway provider;
+for a literal access token supplied directly by a user, the caller remains
+responsible for replacing it before it expires.
 
 ## Deployed versions
 
