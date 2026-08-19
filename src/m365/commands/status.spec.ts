@@ -206,6 +206,24 @@ describe(commands.STATUS, () => {
     }));
   });
 
+  it('redacts an external access token in debug output', async () => {
+    sinon.stub(auth, 'ensureAccessToken').resolves('openshell-placeholder');
+    auth.connection.authType = AuthType.ExternalToken;
+    auth.connection.accessTokens = {
+      'https://graph.microsoft.com': {
+        expiresOn: null,
+        accessToken: 'openshell-placeholder'
+      }
+    };
+
+    await command.action(logger, { options: commandOptionsSchema.parse({ debug: true }) });
+
+    const details = loggerLogSpy.lastCall.args[0];
+    assert.strictEqual(details.authType, 'externalToken');
+    assert.match(details.accessTokens, /\[REDACTED\]/);
+    assert.doesNotMatch(details.accessTokens, /openshell-placeholder/);
+  });
+
   it('correctly handles error when restoring auth', async () => {
     sinonUtil.restore(auth.restoreAuth);
     sinon.stub(auth, 'restoreAuth').callsFake(() => Promise.reject('An error has occurred'));

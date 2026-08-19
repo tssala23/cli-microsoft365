@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import auth from '../../Auth.js';
+import auth, { AuthType } from '../../Auth.js';
 import { Logger } from '../../cli/Logger.js';
 import Command, { CommandArgs, CommandError, globalOptionsZod } from '../../Command.js';
 import commands from './commands.js';
@@ -36,7 +36,13 @@ class StatusCommand extends Command {
       const details = auth.getConnectionDetails(auth.connection);
 
       if (this.debug) {
-        (details as any).accessTokens = JSON.stringify(auth.connection.accessTokens, null, 2);
+        (details as any).accessTokens = JSON.stringify(
+          auth.connection.accessTokens,
+          auth.connection.authType === AuthType.ExternalToken && auth.connection.accessTokens
+            ? (key, value) => key === 'accessToken' ? '[REDACTED]' : value
+            : undefined,
+          2
+        );
       }
 
       await logger.log(details);

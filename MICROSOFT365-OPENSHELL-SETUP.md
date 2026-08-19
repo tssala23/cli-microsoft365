@@ -51,8 +51,12 @@ and auditing remain owned by OpenShell.
 This document records the working `saw-taj2` deployment and the credential
 flow used to give OpenClaw read-only access to Outlook mail and calendar data.
 
-The Microsoft CLI changes used by this deployment are available on the
-[`feature/external-access-token` branch of tssala23/cli-microsoft365](https://github.com/tssala23/cli-microsoft365/tree/feature/external-access-token).
+The hardened Microsoft CLI changes used by this deployment are maintained on
+the [`feature/external-access-token-hardening` branch of
+`tssala23/cli-microsoft365`](https://github.com/tssala23/cli-microsoft365/tree/feature/external-access-token-hardening).
+The branch models the environment credential as external authentication,
+supports Microsoft Graph only, and rejects attempts to send the token to
+another service resource.
 
 ## Deployed versions
 
@@ -108,6 +112,14 @@ the sandbox. The durable refresh token is held by the OpenShell gateway.
 The required branch adds support for `CLIMICROSOFT365_ACCESS_TOKEN` in
 `src/Auth.ts`. It marks the CLI connection active and returns the external
 token without invoking MSAL login or local token storage.
+
+The variable may contain either a literal Graph access token or an opaque
+OpenShell credential placeholder. OpenShell owns refresh when a placeholder is
+used; the CLI cannot refresh a literal token. The environment credential takes
+precedence over stored CLI connections, works only with the configured
+Microsoft Graph cloud endpoint, and is reported by `m365 status` as
+`externalToken`. Removing the variable ends the usable external session even
+if the same CLI process remains running.
 
 ```sh
 npm ci

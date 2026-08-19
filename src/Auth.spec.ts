@@ -42,6 +42,7 @@ const mockTokenCachePlugin: msal.ICachePlugin = {
 };
 
 describe('Auth', () => {
+  const originalExternalAccessToken = process.env.CLIMICROSOFT365_ACCESS_TOKEN;
   let log: any[];
   let auth: Auth;
   let response: DeviceCodeResponse;
@@ -94,6 +95,7 @@ describe('Auth', () => {
   });
 
   beforeEach(() => {
+    delete process.env.CLIMICROSOFT365_ACCESS_TOKEN;
     log = [];
     auth = new Auth();
     response = {
@@ -125,6 +127,12 @@ describe('Auth', () => {
   });
 
   afterEach(() => {
+    if (originalExternalAccessToken === undefined) {
+      delete process.env.CLIMICROSOFT365_ACCESS_TOKEN;
+    }
+    else {
+      process.env.CLIMICROSOFT365_ACCESS_TOKEN = originalExternalAccessToken;
+    }
     loggerSpy.restore();
     readFileSyncStub.restore();
     initializeServerStub.restore();
@@ -166,6 +174,82 @@ describe('Auth', () => {
 
     const accessToken = await auth.ensureAccessToken(resource, logger);
     assert.strictEqual(accessToken, auth.connection.accessTokens[resource].accessToken);
+  });
+
+  it('restores an external access token without reading connection storage', async () => {
+    const token = 'openshell-placeholder';
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = token;
+    auth.connection.deactivate();
+
+    await auth.restoreAuth();
+
+    assert.strictEqual(auth.connection.active, true);
+    assert.strictEqual(auth.connection.authType, AuthType.ExternalToken);
+    assert.strictEqual(auth.connection.accessTokens[auth.defaultResource].accessToken, token);
+    assert.strictEqual(auth.connection.identityName, 'external-token');
+    assert.strictEqual(auth.connection.identityId, 'external-token');
+    assert.strictEqual(auth.connection.name, 'external-token');
+    assert.strictEqual((auth as any).getConnectionInfoFromStorage.called, false);
+  });
+
+  it('uses an external access token for Microsoft Graph', async () => {
+    const token = 'openshell-placeholder';
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = token;
+
+    const actual = await auth.ensureAccessToken(auth.defaultResource, logger, true);
+
+    assert.strictEqual(actual, token);
+    assert.strictEqual(auth.connection.authType, AuthType.ExternalToken);
+    assert(loggerLogToStderrSpy.calledWith('Using access token from CLIMICROSOFT365_ACCESS_TOKEN environment variable'));
+  });
+
+  it('populates external connection identity from JWT claims', async () => {
+    const payload = Buffer.from(JSON.stringify({
+      upn: 'user@contoso.com',
+      oid: identityId,
+      tid: identityTenantId
+    })).toString('base64url');
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = `header.${payload}.signature`;
+    auth.connection.deactivate();
+
+    await auth.restoreAuth();
+
+    assert.strictEqual(auth.connection.identityName, 'user@contoso.com');
+    assert.strictEqual(auth.connection.identityId, identityId);
+    assert.strictEqual(auth.connection.identityTenantId, identityTenantId);
+    assert.strictEqual(auth.connection.name, identityId);
+  });
+
+  it('rejects an external Microsoft Graph token for another resource', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = 'openshell-placeholder';
+
+    await assert.rejects(
+      auth.ensureAccessToken(resource, logger),
+      new CommandError(`CLIMICROSOFT365_ACCESS_TOKEN can only be used with Microsoft Graph (${auth.defaultResource}). The requested resource was ${resource}.`)
+    );
+    assert.strictEqual(auth.connection.accessTokens[resource], undefined);
+  });
+
+  it('ignores an empty external access token', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = '   ';
+    auth.connection.deactivate();
+
+    await auth.restoreAuth();
+
+    assert.strictEqual(auth.connection.authType, AuthType.DeviceCode);
+    assert.strictEqual((auth as any).getConnectionInfoFromStorage.calledOnce, true);
+  });
+
+  it('fails clearly if the external access token is removed', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = 'openshell-placeholder';
+    auth.connection.deactivate();
+    await auth.restoreAuth();
+    delete process.env.CLIMICROSOFT365_ACCESS_TOKEN;
+
+    await assert.rejects(
+      auth.ensureAccessToken(auth.defaultResource, logger),
+      new CommandError('CLIMICROSOFT365_ACCESS_TOKEN is no longer available. Restore the environment credential and try again.')
+    );
   });
 
   it('returns existing access token if still valid (debug)', async () => {
