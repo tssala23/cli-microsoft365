@@ -186,6 +186,8 @@ class Request {
         }
       }
 
+      this.rewriteGraphUrlForExternalProxy(options);
+
       const res = await this.req(options);
 
       const end = process.hrtime.bigint();
@@ -216,6 +218,47 @@ class Request {
 
       throw error;
     }
+  }
+
+  private rewriteGraphUrlForExternalProxy(options: CliRequestOptions): void {
+    const proxyBaseUrl = process.env.CLIMICROSOFT365_GRAPH_BASE_URL?.trim();
+    if (!proxyBaseUrl) {
+      return;
+    }
+
+    if (!process.env.CLIMICROSOFT365_ACCESS_TOKEN?.trim()) {
+      throw new Error('CLIMICROSOFT365_GRAPH_BASE_URL requires CLIMICROSOFT365_ACCESS_TOKEN.');
+    }
+
+    if (auth.connection.cloudType !== CloudType.Public) {
+      throw new Error('CLIMICROSOFT365_GRAPH_BASE_URL currently supports the public Microsoft Graph cloud only.');
+    }
+
+    if (typeof options.url !== 'string') {
+      return;
+    }
+
+    let requestUrl: URL;
+    let proxyUrl: URL;
+    try {
+      requestUrl = new URL(options.url);
+      proxyUrl = new URL(proxyBaseUrl);
+    }
+    catch {
+      throw new Error('CLIMICROSOFT365_GRAPH_BASE_URL must be a valid HTTP(S) origin.');
+    }
+
+    if (!['http:', 'https:'].includes(proxyUrl.protocol) ||
+      proxyUrl.username || proxyUrl.password || proxyUrl.search || proxyUrl.hash ||
+      (proxyUrl.pathname !== '/' && proxyUrl.pathname !== '')) {
+      throw new Error('CLIMICROSOFT365_GRAPH_BASE_URL must be an HTTP(S) origin without credentials, path, query, or fragment.');
+    }
+
+    if (requestUrl.origin !== auth.defaultResource) {
+      return;
+    }
+
+    options.url = `${proxyUrl.origin}${requestUrl.pathname}${requestUrl.search}${requestUrl.hash}`;
   }
 
   private updateRequestForCloudType(options: AxiosRequestConfig, cloudType: CloudType): void {

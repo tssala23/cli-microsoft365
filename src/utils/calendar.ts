@@ -23,8 +23,9 @@ export const calendar = {
     return await request.get<Calendar>(requestOptions);
   },
 
-  async getUserCalendarByName(userId: string, name: string, calendarGroupId?: string, properties?: string): Promise<Calendar> {
-    let url = `https://graph.microsoft.com/v1.0/users('${userId}')/${calendarGroupId ? `calendarGroups/${calendarGroupId}/` : ''}calendars?$filter=name eq '${formatting.encodeQueryParameter(name)}'`;
+  async getUserCalendarByName(userId: string | undefined, name: string, calendarGroupId?: string, properties?: string): Promise<Calendar> {
+    const userPath = userId ? `users('${userId}')` : 'me';
+    let url = `https://graph.microsoft.com/v1.0/${userPath}/${calendarGroupId ? `calendarGroups/${calendarGroupId}/` : ''}calendars?$filter=name eq '${formatting.encodeQueryParameter(name)}'`;
 
     if (properties) {
       url += `&$select=${properties}`;

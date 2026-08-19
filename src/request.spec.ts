@@ -25,6 +25,8 @@ describe('Request', () => {
   });
 
   afterEach(() => {
+    delete process.env.CLIMICROSOFT365_ACCESS_TOKEN;
+    delete process.env.CLIMICROSOFT365_GRAPH_BASE_URL;
     _request.debug = false;
     sinonUtil.restore([
       process.env,
@@ -602,6 +604,62 @@ describe('Request', () => {
       url: 'https://graph.microsoft.com/v1.0/me'
     });
     assert.strictEqual(url, 'https://microsoftgraph.chinacloudapi.cn/v1.0/me');
+  });
+
+  it('routes public Microsoft Graph requests through the external Graph base URL', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = 'inter-vm-bearer';
+    process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080';
+    auth.connection.cloudType = CloudType.Public;
+    let actualUrl = '';
+    sinon.stub(_request as any, 'req').callsFake((requestOptions: CliRequestOptions) => {
+      actualUrl = requestOptions.url as string;
+      return { data: {} };
+    });
+
+    await _request.get({
+      url: 'https://graph.microsoft.com/v1.0/me/messages?$top=10',
+      headers: {}
+    });
+
+    assert.strictEqual(actualUrl, 'http://127.0.0.1:18080/v1.0/me/messages?$top=10');
+    assert(auth.ensureAccessToken.calledWith('https://graph.microsoft.com'));
+  });
+
+  it('does not route non-Graph requests through the external Graph base URL', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = 'inter-vm-bearer';
+    process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080';
+    auth.connection.cloudType = CloudType.Public;
+    let actualUrl = '';
+    sinon.stub(_request as any, 'req').callsFake((requestOptions: CliRequestOptions) => {
+      actualUrl = requestOptions.url as string;
+      return { data: {} };
+    });
+
+    await _request.get({ url: 'https://contoso.sharepoint.com/_api/web', headers: {} });
+
+    assert.strictEqual(actualUrl, 'https://contoso.sharepoint.com/_api/web');
+  });
+
+  it('rejects an external Graph base URL without an external token', async () => {
+    delete process.env.CLIMICROSOFT365_ACCESS_TOKEN;
+    process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080';
+    auth.connection.cloudType = CloudType.Public;
+
+    await assert.rejects(
+      _request.get({ url: 'https://graph.microsoft.com/v1.0/me', headers: {} }),
+      /requires CLIMICROSOFT365_ACCESS_TOKEN/
+    );
+  });
+
+  it('rejects an external Graph base URL containing a path', async () => {
+    process.env.CLIMICROSOFT365_ACCESS_TOKEN = 'inter-vm-bearer';
+    process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080/proxy';
+    auth.connection.cloudType = CloudType.Public;
+
+    await assert.rejects(
+      _request.get({ url: 'https://graph.microsoft.com/v1.0/me', headers: {} }),
+      /must be an HTTP\(S\) origin/
+    );
   });
 
   it(`updates the URL for the USGov cloud`, async () => {

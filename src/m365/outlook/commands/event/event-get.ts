@@ -44,7 +44,7 @@ class OutlookEventGetCommand extends GraphCommand {
 
   public getRefinedSchema(schema: typeof options): z.ZodObject<any> | undefined {
     return schema
-      .refine(options => [options.userId, options.userName].filter(x => x !== undefined).length === 1, {
+      .refine(options => [options.userId, options.userName].filter(x => x !== undefined).length <= 1, {
         error: 'Specify either userId or userName, but not both'
       })
       .refine(options => !(options.calendarId && options.calendarName), {
@@ -60,10 +60,13 @@ class OutlookEventGetCommand extends GraphCommand {
 
     let calendarId = args.options.calendarId;
     if (args.options.calendarName) {
-      calendarId = (await calendar.getUserCalendarByName(userIdentifier!, args.options.calendarName))!.id;
+      calendarId = (await calendar.getUserCalendarByName(userIdentifier, args.options.calendarName))!.id;
     }
 
-    let requestUrl: string = `${this.resource}/v1.0/users('${formatting.encodeQueryParameter(userIdentifier!)}')`;
+    const userPath = userIdentifier
+      ? `users('${formatting.encodeQueryParameter(userIdentifier)}')`
+      : 'me';
+    let requestUrl: string = `${this.resource}/v1.0/${userPath}`;
 
     if (calendarId) {
       requestUrl += `/calendars/${calendarId}/events/${args.options.id}`;

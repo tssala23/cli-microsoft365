@@ -234,11 +234,11 @@ describe(commands.EVENT_LIST, () => {
     assert.notStrictEqual(actual.success, true);
   });
 
-  it('fails validation if neither userId nor userName is specified', () => {
+  it('passes validation if neither userId nor userName is specified', () => {
     const actual = commandOptionsSchema.safeParse({
       id: calendarId
     });
-    assert.notStrictEqual(actual.success, true);
+    assert.strictEqual(actual.success, true);
   });
 
   it('fails validation if userId is not a valid GUID', () => {
@@ -283,6 +283,19 @@ describe(commands.EVENT_LIST, () => {
     });
 
     await command.action(logger, { options: commandOptionsSchema.parse({ userId: userId, verbose: true }) });
+    assert(loggerLogSpy.calledOnceWith(eventsResponse));
+  });
+
+  it('retrieves events for the signed-in user when no user is specified', async () => {
+    sinon.stub(request, 'get').callsFake(async (opts) => {
+      if (opts.url === 'https://graph.microsoft.com/v1.0/me/events') {
+        return { value: eventsResponse };
+      }
+
+      throw 'Invalid request';
+    });
+
+    await command.action(logger, { options: commandOptionsSchema.parse({}) });
     assert(loggerLogSpy.calledOnceWith(eventsResponse));
   });
 
