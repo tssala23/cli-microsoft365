@@ -53,12 +53,11 @@ revalidated end to end in a clean `saw-taj3` deployment. In `saw-taj3`, both a
 direct Outlook CLI request and an OpenClaw-generated inbox summary succeeded
 through the governed Microsoft Graph provider.
 
-The hardened Microsoft CLI changes used by this deployment are maintained on
-the [`feature/external-access-token-hardening` branch of
-`tssala23/cli-microsoft365`](https://github.com/tssala23/cli-microsoft365/tree/feature/external-access-token-hardening).
-The branch models the environment credential as external authentication,
-supports Microsoft Graph only, and rejects attempts to send the token to
-another service resource.
+The hardened Microsoft CLI changes used by this deployment are maintained in
+[`rh-forge/cli-microsoft365`](https://github.com/rh-forge/cli-microsoft365).
+The implementation models the environment credential as external
+authentication, supports Microsoft Graph only, and rejects attempts to send
+the token to another service resource.
 
 ## Hardened branch compared with the original branch
 
@@ -155,7 +154,7 @@ dependencies, runs the TypeScript build, and then packs the compiled `dist`
 entrypoints:
 
 ```sh
-npm install github:tssala23/cli-microsoft365#feature/external-access-token-hardening
+npm install github:rh-forge/cli-microsoft365#main
 ```
 
 This Git installation performs a source build and is therefore slower than
