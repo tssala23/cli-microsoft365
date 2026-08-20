@@ -122,6 +122,13 @@ bearer into `X-Forge-M365-Read-Bearer`. The integration gateway's
 `microsoft365` provider stores the Entra refresh token and substitutes the
 current Graph access token only for the Rust proxy binary's governed requests.
 
+OpenClaw managed-proxy mode clears `NO_PROXY` for tool subprocesses. Therefore
+the skill invokes `/sandbox/bin/m365`, a narrow launcher that restores proxy
+bypass only for `127.0.0.1`, `localhost`, and `::1` before executing the real
+CLI. Without the launcher, the configured loopback Graph base is incorrectly
+sent to the outbound policy proxy and returns HTTP 403. Non-loopback traffic
+remains governed normally.
+
 The deployed dashboard is
 <https://taj2-dashboard-saw-taj2.apps.cluster-dbzdl.dyn.redhatworkshops.io>.
 The dashboard remains token protected; its token is generated on the agent VM
