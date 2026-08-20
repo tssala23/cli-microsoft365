@@ -6,7 +6,6 @@
 coverage
 eslint-rules
 eslint.config.mjs
-skills
 docs/**
 !docs/docs/cmd/**
 !docs/docs/_clisettings.mdx

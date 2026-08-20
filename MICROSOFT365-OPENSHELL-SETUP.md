@@ -59,6 +59,12 @@ The proxy implementation and deployment assets are in
 The CLI changes are on
 [`tssala23/cli-microsoft365` branch `feature/two-vm-m365-proxy`](https://github.com/tssala23/cli-microsoft365/tree/feature/two-vm-m365-proxy).
 
+The CLI repository also contains a generic OpenClaw skill at
+`skills/microsoft365/SKILL.md`. It invokes the normal `m365` executable and
+does not assume OpenShell or proxy routing. The proxy repository owns the
+deployment-specific overlay that invokes `/sandbox/bin/m365` to preserve the
+governed loopback route under OpenClaw managed-proxy mode.
+
 The original single-VM credential flow was validated in `saw-taj3`. The
 deployment described here is its two-VM successor in `saw-taj2`, adding an
 integration-side proxy boundary so Microsoft credentials never enter the
