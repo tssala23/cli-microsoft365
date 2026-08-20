@@ -18,7 +18,7 @@ It works as follows:
    install software or contain credentials.
 3. Gateway A vends an opaque inter-VM placeholder through
    `CLIMICROSOFT365_ACCESS_TOKEN`. The agent forwarder maps the CLI's
-   `Authorization` header to `X-Forge-M365-Read-Bearer`; OpenShell substitutes
+   `Authorization` header to `X-M365-Read-Bearer`; OpenShell substitutes
    the static inter-VM bearer only on the approved service request.
 4. The integration VM validates that bearer, then forwards the request through
    an exposed OpenShell service to the Rust proxy sandbox. The proxy accepts
@@ -55,7 +55,7 @@ remain owned by the integration-side OpenShell gateway. Breaking out of the
 agent sandbox does not reveal the Microsoft refresh or access token.
 
 The proxy implementation and deployment assets are in
-[`tssala23/forge-proxy-m365`](https://github.com/tssala23/forge-proxy-m365).
+[`tssala23/proxy-m365`](https://github.com/tssala23/proxy-m365).
 The CLI changes are on
 [`tssala23/cli-microsoft365` branch `feature/two-vm-m365-proxy`](https://github.com/tssala23/cli-microsoft365/tree/feature/two-vm-m365-proxy).
 
@@ -71,8 +71,7 @@ integration-side proxy boundary so Microsoft credentials never enter the
 agent VM.
 
 The hardened Microsoft CLI changes used by this deployment are maintained in
-[`rh-forge/cli-microsoft365`](https://github.com/rh-forge/cli-microsoft365).
-The implementation models the environment credential as external
+this repository. The implementation models the environment credential as external
 authentication, supports Microsoft Graph only, and rejects attempts to send
 the token to another service resource.
 
@@ -117,14 +116,14 @@ responsible for replacing it before it expires.
 
 The agent VM is `taj2`; the credential/proxy VM is `taj2-int`. The agent
 sandbox is also named `taj2`, and the integration sandbox is
-`forge-proxy-m365`. Host-side systemd units keep the two HTTP forwarders, Rust
+`proxy-m365`. Host-side systemd units keep the two HTTP forwarders, Rust
 proxy process, OpenClaw gateway, and dashboard forward alive across SSH
 disconnects and VM restarts.
 
 The agent gateway's `m365-intervm` provider stores only the static inter-VM
 bearer. Its profile permits Node to reach only
 `taj2-int-m365-read.saw-taj2.svc.cluster.local:18790` and substitutes the
-bearer into `X-Forge-M365-Read-Bearer`. The integration gateway's
+bearer into `X-M365-Read-Bearer`. The integration gateway's
 `microsoft365` provider stores the Entra refresh token and substitutes the
 current Graph access token only for the Rust proxy binary's governed requests.
 
@@ -208,7 +207,7 @@ dependencies, runs the TypeScript build, and then packs the compiled `dist`
 entrypoints:
 
 ```sh
-npm install github:rh-forge/cli-microsoft365#main
+npm install github:tssala23/cli-microsoft365#feature/two-vm-m365-proxy
 ```
 
 This Git installation performs a source build and is therefore slower than
