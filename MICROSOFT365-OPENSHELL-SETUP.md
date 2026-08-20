@@ -57,7 +57,7 @@ agent sandbox does not reveal the Microsoft refresh or access token.
 The proxy implementation and deployment assets are in
 [`tssala23/forge-proxy-m365`](https://github.com/tssala23/forge-proxy-m365).
 The CLI changes are on
-[`rh-forge/cli-microsoft365` branch `feature/two-vm-m365-proxy`](https://github.com/rh-forge/cli-microsoft365/tree/feature/two-vm-m365-proxy).
+[`tssala23/cli-microsoft365` branch `feature/two-vm-m365-proxy`](https://github.com/tssala23/cli-microsoft365/tree/feature/two-vm-m365-proxy).
 
 The original single-VM credential flow was validated in `saw-taj3`. The
 deployment described here is its two-VM successor in `saw-taj2`, adding an
