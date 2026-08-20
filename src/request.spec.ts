@@ -611,7 +611,7 @@ describe('Request', () => {
     process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080';
     auth.connection.cloudType = CloudType.Public;
     let actualUrl = '';
-    sinon.stub(_request as any, 'req').callsFake((requestOptions: CliRequestOptions) => {
+    sinon.stub(_request as any, 'req').callsFake((requestOptions: any) => {
       actualUrl = requestOptions.url as string;
       return { data: {} };
     });
@@ -622,7 +622,7 @@ describe('Request', () => {
     });
 
     assert.strictEqual(actualUrl, 'http://127.0.0.1:18080/v1.0/me/messages?$top=10');
-    assert(auth.ensureAccessToken.calledWith('https://graph.microsoft.com'));
+    assert((auth.ensureAccessToken as sinon.SinonStub).calledWith('https://graph.microsoft.com'));
   });
 
   it('does not route non-Graph requests through the external Graph base URL', async () => {
@@ -630,7 +630,7 @@ describe('Request', () => {
     process.env.CLIMICROSOFT365_GRAPH_BASE_URL = 'http://127.0.0.1:18080';
     auth.connection.cloudType = CloudType.Public;
     let actualUrl = '';
-    sinon.stub(_request as any, 'req').callsFake((requestOptions: CliRequestOptions) => {
+    sinon.stub(_request as any, 'req').callsFake((requestOptions: any) => {
       actualUrl = requestOptions.url as string;
       return { data: {} };
     });
