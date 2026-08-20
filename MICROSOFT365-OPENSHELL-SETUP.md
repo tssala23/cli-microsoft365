@@ -2,33 +2,37 @@
 
 ## TL;DR
 
-This setup runs OpenClaw and CLI for Microsoft 365 inside an OpenShell-governed
-Docker sandbox hosted by a KubeVirt VM on OpenShift. It lets OpenClaw read and
-summarize Outlook email and calendar data without storing a Microsoft refresh
-token or Microsoft CLI login cache inside the sandbox.
+This setup uses two KubeVirt VMs in OpenShift. The agent VM runs OpenClaw and
+CLI for Microsoft 365; the integration VM runs a narrow, read-only Graph proxy.
+The agent VM has neither the Entra refresh token nor a Graph access token. The
+integration VM's OpenShell gateway owns the refresh token and substitutes a
+short-lived Graph token only when the proxy makes an approved request.
 
 It works as follows:
 
-1. A custom sandbox image contains OpenClaw, the Microsoft CLI build that reads
-   `CLIMICROSOFT365_ACCESS_TOKEN`, and a gateway-compatible OpenShell
-   supervisor.
+1. A custom agent sandbox contains OpenClaw, the Microsoft CLI build that reads
+   `CLIMICROSOFT365_ACCESS_TOKEN`, a loopback forwarder, and a
+   gateway-compatible OpenShell supervisor.
 2. An OpenClaw `microsoft365` skill tells the agent which read-only `m365
    outlook` commands to run. The skill provides instructions; it does not
    install software or contain credentials.
-3. An OpenShell `microsoft365` provider stores the Entra OAuth refresh token in
-   the gateway VM and regularly obtains short-lived Microsoft Graph access
-   tokens.
-4. The sandbox receives an OpenShell credential placeholder through
-   `CLIMICROSOFT365_ACCESS_TOKEN`. When the Microsoft CLI makes an approved
-   Graph request, the sandbox supervisor verifies the executable, destination,
-   method, and path, then substitutes the current access token at the governed
-   network boundary.
-5. A separate `openai-openclaw` provider gives OpenClaw governed access to the
+3. Gateway A vends an opaque inter-VM placeholder through
+   `CLIMICROSOFT365_ACCESS_TOKEN`. The agent forwarder maps the CLI's
+   `Authorization` header to `X-Forge-M365-Read-Bearer`; OpenShell substitutes
+   the static inter-VM bearer only on the approved service request.
+4. The integration VM validates that bearer, then forwards the request through
+   an exposed OpenShell service to the Rust proxy sandbox. The proxy accepts
+   only `GET`, `HEAD`, and `OPTIONS` for an explicit `/v1.0/me` mail/calendar
+   allowlist.
+5. Gateway B stores the Entra refresh token in its `microsoft365` provider. It
+   resolves the proxy sandbox's Graph-token placeholder at egress, so neither
+   OpenClaw nor the agent VM can read the real Microsoft credential.
+6. A separate `openai-openclaw` provider gives OpenClaw governed access to the
    OpenAI model used to interpret requests and summarize the Graph results.
-6. OpenShell policy permits only selected read operations against
-   `graph.microsoft.com`; mailbox writes and unrelated outbound destinations
-   remain blocked and audited.
-7. The optional browser dashboard runs through OpenClaw's token-protected
+7. Both gateways enforce independent policies: Gateway A permits the internal
+   service only, while Gateway B permits the proxy binary to reach read-only
+   Microsoft Graph. Writes, `/users/...`, and unrelated APIs are rejected.
+8. The browser dashboard runs through OpenClaw's token-protected
    gateway on sandbox port `18789`. A persistent `openshell forward service`
    process publishes that sandbox port on the VM so the OpenShift Route can
    reach it.
@@ -36,22 +40,29 @@ It works as follows:
 In short:
 
 ```text
-Browser or local agent
-        -> OpenClaw
-        -> microsoft365 skill
-        -> m365 outlook command
-        -> OpenShell credential substitution + policy enforcement
-        -> Microsoft Graph
+Browser -> OpenClaw -> microsoft365 skill -> m365 CLI
+  -> agent loopback forwarder
+  -> Gateway A: substitute inter-VM bearer
+  -> OpenShift Service -> integration forwarder
+  -> integration OpenShell service -> Rust allowlist proxy
+  -> Gateway B: substitute refreshed Graph token
+  -> Microsoft Graph /v1.0/me/...
 ```
 
-The result is a working OpenClaw assistant that can summarize recent Outlook
-messages and inspect calendar data while credential refresh, egress control,
-and auditing remain owned by OpenShell.
+The result is an OpenClaw assistant that can summarize Outlook messages and
+inspect calendar data while credential refresh, egress control, and auditing
+remain owned by the integration-side OpenShell gateway. Breaking out of the
+agent sandbox does not reveal the Microsoft refresh or access token.
 
-This document records the credential flow first proven in `saw-taj2` and
-revalidated end to end in a clean `saw-taj3` deployment. In `saw-taj3`, both a
-direct Outlook CLI request and an OpenClaw-generated inbox summary succeeded
-through the governed Microsoft Graph provider.
+The proxy implementation and deployment assets are in
+[`tssala23/forge-proxy-m365`](https://github.com/tssala23/forge-proxy-m365).
+The CLI changes are on
+[`rh-forge/cli-microsoft365` branch `feature/two-vm-m365-proxy`](https://github.com/rh-forge/cli-microsoft365/tree/feature/two-vm-m365-proxy).
+
+The original single-VM credential flow was validated in `saw-taj3`. The
+deployment described here is its two-VM successor in `saw-taj2`, adding an
+integration-side proxy boundary so Microsoft credentials never enter the
+agent VM.
 
 The hardened Microsoft CLI changes used by this deployment are maintained in
 [`rh-forge/cli-microsoft365`](https://github.com/rh-forge/cli-microsoft365).
@@ -95,6 +106,36 @@ responsible for replacing it before it expires.
 | Supervisor running inside the sandbox | `0.0.99-rhaiv.0` |
 | CLI for Microsoft 365 | `11.11.0` |
 | OpenClaw | `2026.7.1` (`2d2ddc4`) |
+
+## Current `saw-taj2` deployment
+
+The agent VM is `taj2`; the credential/proxy VM is `taj2-int`. The agent
+sandbox is also named `taj2`, and the integration sandbox is
+`forge-proxy-m365`. Host-side systemd units keep the two HTTP forwarders, Rust
+proxy process, OpenClaw gateway, and dashboard forward alive across SSH
+disconnects and VM restarts.
+
+The agent gateway's `m365-intervm` provider stores only the static inter-VM
+bearer. Its profile permits Node to reach only
+`taj2-int-m365-read.saw-taj2.svc.cluster.local:18790` and substitutes the
+bearer into `X-Forge-M365-Read-Bearer`. The integration gateway's
+`microsoft365` provider stores the Entra refresh token and substitutes the
+current Graph access token only for the Rust proxy binary's governed requests.
+
+The deployed dashboard is
+<https://taj2-dashboard-saw-taj2.apps.cluster-dbzdl.dyn.redhatworkshops.io>.
+The dashboard remains token protected; its token is generated on the agent VM
+and copied into the sandbox rather than committed to this repository.
+
+End-to-end checks performed after deployment confirmed that:
+
+- `m365 outlook message list --folderName inbox` returned mailbox records;
+- `m365 outlook event list` successfully queried the delegated user's default
+  calendar through `/v1.0/me`;
+- OpenClaw used the `microsoft365` skill to produce a five-message Inbox
+  summary;
+- `POST /v1.0/me/messages`, `/v1.0/users`, and `/v1.0/me/drive` were rejected
+  with HTTP 403.
 
 The gateway, VM supervisor, and sandbox supervisor must use a compatible
 protocol. A `0.0.109-dev.2` sandbox supervisor initially rejected credentials
